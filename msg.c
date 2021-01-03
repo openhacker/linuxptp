@@ -433,8 +433,10 @@ int msg_pre_send(struct ptp_message *m)
 {
 	int type;
 
-	if (hdr_pre_send(&m->header))
+	if (hdr_pre_send(&m->header)) {
+		pr_err("hdr_pre_send failed");
 		return -1;
+	}
 
 	type = msg_type(m);
 
@@ -472,6 +474,7 @@ int msg_pre_send(struct ptp_message *m)
 		port_id_pre_send(&m->management.targetPortIdentity);
 		break;
 	default:
+		pr_err("%s %d default case %s", __FILE__, __LINE__, __func__);
 		return -1;
 	}
 	suffix_pre_send(m);

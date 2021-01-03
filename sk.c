@@ -329,7 +329,7 @@ int sk_receive(int fd, void *buf, int buflen,
 	       struct address *addr, struct hw_timestamp *hwts, int flags)
 {
 	char control[256];
-	int cnt = 0, res = 0, level, type;
+	int cnt = 0,  level, type;
 	struct cmsghdr *cm;
 	struct iovec iov = { buf, buflen };
 	struct msghdr msg;
@@ -347,18 +347,53 @@ int sk_receive(int fd, void *buf, int buflen,
 	msg.msg_controllen = sizeof(control);
 
 	if (flags == MSG_ERRQUEUE) {
-		struct pollfd pfd = { fd, sk_events, 0 };
-		res = poll(&pfd, 1, sk_tx_timeout);
-		if (res < 1) {
-			pr_err(res ? "poll for tx timestamp failed: %m" :
-			             "timed out while polling for tx timestamp");
-			pr_err("increasing tx_timestamp_timeout may correct "
-			       "this issue, but it is likely caused by a driver bug");
-			return -errno;
-		} else if (!(pfd.revents & sk_revents)) {
-			pr_err("poll for tx timestamp woke up on non ERR event");
+		struct timeval start;
+		struct timeval end;
+		struct timeval delta;
+		int i;
+		int res;
+		const int MAX_POLLS = 10;
+		static int count = 0;
+
+		gettimeofday(&start, NULL);
+		for(i = 0; i < MAX_POLLS; i++) {
+			struct pollfd pfd = { fd, sk_events, 0 };
+
+			res = poll(&pfd, 1, sk_tx_timeout);
+
+			if(0 == res) // timeout
+				continue;
+			else if(res < 0) {
+				pr_err("res = %d, error = %s\n", res, strerror(errno));
+				pr_err(res ? "poll for tx timestamp failed: %m" :
+				             "timed out while polling for tx timestamp");
+				pr_err("increasing tx_timestamp_timeout may correct "
+				       "this issue, but it is likely caused by a driver bug");
+				return -errno;
+			} else if (!(pfd.revents & sk_revents)) {
+				// ml -- not sure ?
+				pr_err("poll for tx timestamp woke up on non ERR event");
+				return -1;
+			} else if(1 == res) {
+				break;
+			} else {
+				pr_err("WTF in %s\n", __func__);
+				abort();
+			}
+		}
+		gettimeofday(&end, NULL);
+		timersub(&end, &start, &delta);
+		if(i >=  MAX_POLLS) {
+			pr_err("%s: timeout %d.%06d\n", __func__,  (int) delta.tv_sec, (int) delta.tv_usec);
 			return -1;
 		}
+		count++;
+		if(delta.tv_usec > 1000) {
+			pr_err("%s: loop %d: no timeout %d.%06d\n", __func__, count, (int) delta.tv_sec,
+						(int) delta.tv_usec);
+			count = 0;
+		}
+		
 	}
 
 	cnt = recvmsg(fd, &msg, flags);
@@ -476,6 +511,7 @@ int sk_timestamping_init(int fd, const char *device, enum timestamp_type type,
 	if (type != TS_SOFTWARE) {
 		filter1 = HWTSTAMP_FILTER_PTP_V2_EVENT;
 		switch (type) {
+		// is this a bug/typo?   type != TS_SOFTWARE
 		case TS_SOFTWARE:
 			tx_type = HWTSTAMP_TX_OFF;
 			break;

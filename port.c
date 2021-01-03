@@ -1640,7 +1640,7 @@ int port_tx_sync(struct port *p, struct address *dst)
 	}
 	err = port_prepare_and_send(p, msg, event);
 	if (err) {
-		pr_err("port %hu: send sync failed", portnum(p));
+		pr_err("port %hu: send sync failed, err = %d", portnum(p), err);
 		goto out;
 	}
 	if (p->timestamping == TS_ONESTEP || p->timestamping == TS_P2P1STEP) {
@@ -2890,6 +2890,7 @@ int port_prepare_and_send(struct port *p, struct ptp_message *msg,
 	int cnt;
 
 	if (msg_pre_send(msg)) {
+		pr_err("msg_pre_send failed");
 		return -1;
 	}
 	if (msg_unicast(msg)) {
@@ -2898,6 +2899,7 @@ int port_prepare_and_send(struct port *p, struct ptp_message *msg,
 		cnt = transport_send(p->trp, &p->fda, event, msg);
 	}
 	if (cnt <= 0) {
+		pr_err("%s: cnt <= 0 = %d", __func__, cnt);
 		return -1;
 	}
 	port_stats_inc_tx(p, msg);

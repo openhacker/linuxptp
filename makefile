@@ -17,7 +17,7 @@
 
 KBUILD_OUTPUT =
 
-DEBUG	=
+DEBUG	= -g
 CC	= $(CROSS_COMPILE)gcc
 VER     = -DVER=$(version)
 CFLAGS	= -Wall $(VER) $(incdefs) $(DEBUG) $(EXTRA_CFLAGS)
